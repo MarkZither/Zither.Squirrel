@@ -102,16 +102,16 @@ namespace Squirrel
         }
 
         /// <inheritdoc/>
-        public async Task<string> ApplyReleases(UpdateInfo updateInfo, Action<int> progress = null)
+        public async Task<string> ApplyReleases(UpdateInfo updateInfo, Action<int> progress = null, bool autoStart = true)
         {
             var applyReleases = new ApplyReleasesImpl(AppDirectory);
             await acquireUpdateLock().ConfigureAwait(false);
 
-            return await applyReleases.ApplyReleases(updateInfo, false, false, progress).ConfigureAwait(false);
+            return await applyReleases.ApplyReleases(updateInfo, false, false, autoStart, progress).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>
-        public async Task FullInstall(bool silentInstall = false, Action<int> progress = null)
+        public async Task FullInstall(bool silentInstall = false, Action<int> progress = null, bool autoStart = true)
         {
             var updateInfo = await CheckForUpdate(intention: UpdaterIntention.Install).ConfigureAwait(false);
             await DownloadReleases(updateInfo.ReleasesToApply).ConfigureAwait(false);
@@ -119,7 +119,7 @@ namespace Squirrel
             var applyReleases = new ApplyReleasesImpl(AppDirectory);
             await acquireUpdateLock().ConfigureAwait(false);
 
-            await applyReleases.ApplyReleases(updateInfo, silentInstall, true, progress).ConfigureAwait(false);
+            await applyReleases.ApplyReleases(updateInfo, silentInstall, autoStart, true, progress).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>

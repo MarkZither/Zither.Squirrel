@@ -23,6 +23,7 @@ namespace Squirrel.Update
         internal bool onlyUpdateShortcuts { get; private set; } = false;
         internal bool checkInstall { get; private set; } = false;
         internal bool silentInstall { get; private set; } = false;
+        internal bool autoStart { get; private set; } = true;
 
         public StartupOption(string[] args)
         {
@@ -57,6 +58,7 @@ namespace Squirrel.Update
                 // hidden arguments, used internally by Squirrel and should not be used by Squirrel applications themselves
                 { "install=", "Install the app whose package is in the specified directory or url", v => { updateAction = UpdateAction.Install; target = v; }, true },
                 { "s|silent", "Silent install", _ => silentInstall = true, true},
+                { "noautostart", "Install with no autostart", _  => autoStart = false, true },
                 { "processStart=", "Start an executable in the latest version of the app package", v => { updateAction = UpdateAction.ProcessStart; processStart = v; }, true},
                 { "processStartAndWait=", "Start an executable in the latest version of the app package", v => { updateAction = UpdateAction.ProcessStart; processStart = v; shouldWait = true; }, true},
                 { "a=|process-start-args=", "Arguments that will be used when starting executable", v => processStartArgs = v, true},

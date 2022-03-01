@@ -102,7 +102,7 @@ namespace Squirrel
         /// will return values from 0-100 and Complete, or Throw</param>
         /// <returns>The path to the installed application (i.e. the path where
         /// your package's contents ended up</returns>
-        Task<string> ApplyReleases(UpdateInfo updateInfo, Action<int> progress = null);
+        Task<string> ApplyReleases(UpdateInfo updateInfo, Action<int> progress = null, bool autoStart = true);
 
         /// <summary>
         /// Completely Installs a targeted app
@@ -110,7 +110,7 @@ namespace Squirrel
         /// <param name="silentInstall">If true, don't run the app once install completes.</param>
         /// <param name="progress">A Observer which can be used to report Progress - 
         /// will return values from 0-100 and Complete, or Throw</param>
-        Task FullInstall(bool silentInstall, Action<int> progress = null);
+        Task FullInstall(bool silentInstall, Action<int> progress = null, bool autoStart = true);
 
         /// <summary>
         /// Completely uninstalls the targeted app

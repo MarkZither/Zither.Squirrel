@@ -1,4 +1,4 @@
-using Squirrel.SimpleSplat;
+﻿using Squirrel.SimpleSplat;
 using Squirrel.Json;
 using System;
 using System.Collections.Generic;
@@ -81,11 +81,11 @@ namespace Squirrel.Update
 
             switch (opt.updateAction) {
             case UpdateAction.Setup:
-                Setup(opt.target, opt.silentInstall, opt.checkInstall).Wait();
+                Setup(opt.target, opt.silentInstall, opt.autoStart, opt.checkInstall).Wait();
                 break;
             case UpdateAction.Install:
                 var progressSource = new ProgressSource();
-                Install(opt.silentInstall, progressSource, Path.GetFullPath(opt.target)).Wait();
+                Install(opt.silentInstall, opt.autoStart, progressSource, Path.GetFullPath(opt.target)).Wait();
                 break;
             case UpdateAction.Uninstall:
                 Uninstall().Wait();
@@ -117,7 +117,7 @@ namespace Squirrel.Update
             return 0;
         }
 
-        static async Task Setup(string setupPath, bool silentInstall, bool checkInstall)
+        static async Task Setup(string setupPath, bool silentInstall, bool autoStart, bool checkInstall)
         {
             Log.Info($"Extracting bundled app data from '{setupPath}'.");
 
@@ -240,11 +240,11 @@ namespace Squirrel.Update
             };
 
             splash.SetMessage(null);
-            await Install(silentInstall, progressSource, tempFolder);
+            await Install(silentInstall, autoStart, progressSource, tempFolder);
             splash.Dispose();
         }
 
-        static async Task Install(bool silentInstall, ProgressSource progressSource, string sourceDirectory = null)
+        static async Task Install(bool silentInstall, bool autoStart, ProgressSource progressSource, string sourceDirectory = null)
         {
             sourceDirectory = sourceDirectory ?? AssemblyRuntimeInfo.BaseDirectory;
             var releasesPath = Path.Combine(sourceDirectory, "RELEASES");
@@ -291,7 +291,7 @@ namespace Squirrel.Update
                 Log.ErrorIfThrows(() => File.Copy(AssemblyRuntimeInfo.EntryExePath, updateTarget, true),
                     "Failed to copy Update.exe to " + updateTarget);
 
-                await mgr.FullInstall(silentInstall, progressSource.Raise);
+                await mgr.FullInstall(silentInstall, progressSource.Raise, autoStart);
 
                 await Log.ErrorIfThrows(() => mgr.CreateUninstallerRegistryEntry(),
                     "Failed to create uninstaller registry entry");
