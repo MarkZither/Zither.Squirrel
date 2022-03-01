@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Mime;
 using System.Security;
 using System.Text;
 using System.Threading.Tasks;
@@ -97,17 +98,30 @@ namespace Squirrel.Github
             return allReleasesFiles.First();
         }
 
+        bool IsAcceptedMimiType(string mimeType)
+        {
+            string[] types = { "application/octet-stream", "application/json" };
+            return types.Contains(mimeType);
+        }
+
+        void EnsureMimeType(GithubReleaseAsset asset)
+        {
+            if (false == IsAcceptedMimiType(asset.ContentType)) {
+                throw new Exception($"Github returned a mime type ({asset.ContentType}) that we do not accept for asset {asset.Name}");
+            }
+        }
+
         public Task DownloadAsset(GithubRelease release, string assetName, string targetFile, Action<int> progress = null)
         {
             GithubReleaseAsset asset = GetAsset(release, assetName);
-
-            // TODO: Validate ContentType is a valid content tpye before making new request
+            EnsureMimeType(asset);
             return HttpClient.DownloadFile(asset.Url, targetFile, progress, AuthorizationHeader, asset.ContentType);
         }
 
         public Task<string> DownloadAsset(GithubRelease release, string assetName)
         {
             GithubReleaseAsset asset = GetAsset(release, assetName);
+            EnsureMimeType(asset);
             return HttpClient.DownloadString(asset.Url, AuthorizationHeader, asset.ContentType);
         }
     }
