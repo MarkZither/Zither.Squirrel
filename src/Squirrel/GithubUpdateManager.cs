@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
@@ -89,8 +90,10 @@ namespace Squirrel
                 throw new Exception("No assets on latest github release");
             }
 
+            string targetFile = Path.Combine(PackagesDirectory, release.Filename);
+
             // TODO: Handle progress
-            await client.DownloadAsset(latest, release.Filename);
+            await client.DownloadAsset(latest, release.Filename, targetFile);
         }
     }
 }
