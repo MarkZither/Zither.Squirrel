@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Tasks;
+using Squirrel.Github;
 using Squirrel.Json;
 
 namespace Squirrel
@@ -58,87 +59,38 @@ namespace Squirrel
             IFileDownloader urlDownloader = null)
             : base(null, applicationIdOverride, localAppDataDirectoryOverride, urlDownloader)
         {
-            _repoUrl = repoUrl;
+            _updateUrlOrPath = _repoUrl = repoUrl;
             _accessToken = accessToken;
             _prerelease = prerelease;
         }
 
-        /// <inheritdoc />
-        public override async Task<UpdateInfo> CheckForUpdate(bool ignoreDeltaUpdates = false, Action<int> progress = null, UpdaterIntention intention = UpdaterIntention.Update)
-        {
-            await EnsureReleaseUrl().ConfigureAwait(false);
-            return await base.CheckForUpdate(ignoreDeltaUpdates, progress, intention).ConfigureAwait(false);
-        }
+
 
         /// <inheritdoc />
-        public override async Task DownloadReleases(IEnumerable<ReleaseEntry> releasesToDownload, Action<int> progress = null)
+        protected override async Task<string> ReadReleasesFile(string updateUrlOrPath, ReleaseEntry latestLocalRelease, IFileDownloader urlDownloader)
         {
-            await EnsureReleaseUrl().ConfigureAwait(false);
-            await base.DownloadReleases(releasesToDownload, progress).ConfigureAwait(false);
-        }
+            GithubClient client = new GithubClient(updateUrlOrPath, urlDownloader, _accessToken);
 
-        private async Task EnsureReleaseUrl()
-        {
-            if (this._updateUrlOrPath == null) {
-                this._updateUrlOrPath = await GetLatestGithubReleaseUrl().ConfigureAwait(false);
-            }
-        }
-
-        private async Task<string> GetLatestGithubReleaseUrl()
-        {
-            var repoUri = new Uri(_repoUrl);
-            var releases = await GetGithubReleases(repoUri, _accessToken, _prerelease, _urlDownloader).ConfigureAwait(false);
-            return releases.First().DownloadUrl;
-        }
-
-        internal static async Task<IEnumerable<GithubRelease>> GetGithubReleases(Uri repoUri, string token, bool prerelease, IFileDownloader downloader)
-        {
-            if (repoUri.Segments.Length != 3) {
-                throw new Exception("Repo URL must be to the root URL of the repo e.g. https://github.com/myuser/myrepo");
+            GithubRelease latest = await client.GetLatestRelease(_prerelease).ConfigureAwait(false);
+            if (latest.Assets == null || latest.Assets.Count() == 0) {
+                throw new Exception("No assets on latest github release");
             }
 
-            var releasesApiBuilder = new StringBuilder("repos")
-                .Append(repoUri.AbsolutePath)
-                .Append("/releases");
-
-            Uri baseAddress;
-
-            if (repoUri.Host.EndsWith("github.com", StringComparison.OrdinalIgnoreCase)) {
-                baseAddress = new Uri("https://api.github.com/");
-            } else {
-                // if it's not github.com, it's probably an Enterprise server
-                // now the problem with Enterprise is that the API doesn't come prefixed
-                // it comes suffixed so the API path of http://internal.github.server.local
-                // API location is http://interal.github.server.local/api/v3
-                baseAddress = new Uri(string.Format("{0}{1}{2}/api/v3/", repoUri.Scheme, Uri.SchemeDelimiter, repoUri.Host));
-            }
-
-            // above ^^ notice the end slashes for the baseAddress, explained here: http://stackoverflow.com/a/23438417/162694
-
-            string bearer = null;
-            if (!string.IsNullOrWhiteSpace(token))
-                bearer = "Bearer " + token;
-
-            var fullPath = new Uri(baseAddress, releasesApiBuilder.ToString());
-            var response = await downloader.DownloadString(fullPath.ToString(), bearer).ConfigureAwait(false);
-
-            var releases = SimpleJson.DeserializeObject<List<GithubRelease>>(response);
-            return releases.OrderByDescending(d => d.PublishedAt).Where(x => prerelease || !x.Prerelease);
+            return await client.DownloadAsset(latest, ReleasesFileName).ConfigureAwait(false);
         }
 
-        [DataContract]
-        internal class GithubRelease
+        /// <inheritdoc />
+        protected override async Task DownloadRelease(string updateUrlOrPath, ReleaseEntry release, ProgressContext progress, IFileDownloader urlDownloader)
         {
-            [DataMember(Name = "prerelease")]
-            public bool Prerelease { get; set; }
+            GithubClient client = new GithubClient(updateUrlOrPath, urlDownloader, _accessToken);
 
-            [DataMember(Name = "published_at")]
-            public DateTime PublishedAt { get; set; }
+            GithubRelease latest = await client.GetLatestRelease(_prerelease).ConfigureAwait(false);
+            if (latest.Assets == null || latest.Assets.Count() == 0) {
+                throw new Exception("No assets on latest github release");
+            }
 
-            [DataMember(Name = "html_url")]
-            public string HtmlUrl { get; set; }
-
-            public string DownloadUrl => HtmlUrl.Replace("/tag/", "/download/");
+            // TODO: Handle progress
+            await client.DownloadAsset(latest, release.Filename);
         }
     }
 }

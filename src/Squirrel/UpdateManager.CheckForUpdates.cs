@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using Squirrel.SimpleSplat;
@@ -11,211 +10,143 @@ namespace Squirrel
 {
     public partial class UpdateManager
     {
-        internal class CheckForUpdateImpl : IEnableLogger
+        /// <inheritdoc/>
+        public virtual async Task<UpdateInfo> CheckForUpdate(bool ignoreDeltaUpdates = false, Action<int> progress = null, UpdaterIntention intention = UpdaterIntention.Update)
         {
-            readonly string rootAppDirectory;
+            await acquireUpdateLock().ConfigureAwait(false);
+            return await CheckForUpdate(intention, Utility.LocalReleaseFileForAppDir(AppDirectory), _updateUrlOrPath, ignoreDeltaUpdates, progress, _urlDownloader).ConfigureAwait(false);
+        }
 
-            public CheckForUpdateImpl(string rootAppDirectory)
-            {
-                this.rootAppDirectory = rootAppDirectory;
+        async Task<UpdateInfo> CheckForUpdate(
+            UpdaterIntention intention,
+            string localReleaseFile,
+            string updateUrlOrPath,
+            bool ignoreDeltaUpdates = false,
+            Action<int> progress = null,
+            IFileDownloader urlDownloader = null)
+        {
+            progress ??= (_ => { });
+
+            var localReleases = Enumerable.Empty<ReleaseEntry>();
+            var stagingId = intention == UpdaterIntention.Install ? null : getOrCreateStagedUserId();
+
+            bool shouldInitialize = intention == UpdaterIntention.Install;
+
+            if (intention != UpdaterIntention.Install) {
+                try {
+                    localReleases = Utility.LoadLocalReleases(localReleaseFile);
+                } catch (Exception ex) {
+                    // Something has gone pear-shaped, let's start from scratch
+                    this.Log().WarnException("Failed to load local releases, starting from scratch", ex);
+                    shouldInitialize = true;
+                }
             }
 
-            public async Task<UpdateInfo> CheckForUpdate(
-                UpdaterIntention intention,
-                string localReleaseFile,
-                string updateUrlOrPath,
-                bool ignoreDeltaUpdates = false,
-                Action<int> progress = null,
-                IFileDownloader urlDownloader = null)
-            {
-                progress = progress ?? (_ => { });
+            if (shouldInitialize) initializeClientAppDirectory();
 
-                var localReleases = Enumerable.Empty<ReleaseEntry>();
-                var stagingId = intention == UpdaterIntention.Install ? null : getOrCreateStagedUserId();
+            var latestLocalRelease = localReleases.Count() > 0 ?
+                localReleases.MaxBy(x => x.Version).First() :
+                default(ReleaseEntry);
 
-                bool shouldInitialize = intention == UpdaterIntention.Install;
+            // Fetch the remote RELEASES file, whether it's a local dir or an
+            // HTTP URL
+            string releaseFile = await ReadReleasesFile(updateUrlOrPath, latestLocalRelease, urlDownloader).ConfigureAwait(false);
+            progress(33);
+                
+            var ret = default(UpdateInfo);
+            var remoteReleases = ReleaseEntry.ParseReleaseFileAndApplyStaging(releaseFile, stagingId);
+            progress(66);
 
-                if (intention != UpdaterIntention.Install) {
-                    try {
-                        localReleases = Utility.LoadLocalReleases(localReleaseFile);
-                    } catch (Exception ex) {
-                        // Something has gone pear-shaped, let's start from scratch
-                        this.Log().WarnException("Failed to load local releases, starting from scratch", ex);
-                        shouldInitialize = true;
-                    }
-                }
+            if (!remoteReleases.Any()) {
+                throw new Exception("Remote release File is empty or corrupted");
+            }
 
-                if (shouldInitialize) initializeClientAppDirectory();
+            ret = determineUpdateInfo(intention, localReleases, remoteReleases, ignoreDeltaUpdates);
 
-                string releaseFile;
+            progress(100);
+            return ret;
+        }
 
-                var latestLocalRelease = localReleases.Count() > 0 ?
-                    localReleases.MaxBy(x => x.Version).First() :
-                    default(ReleaseEntry);
+        void initializeClientAppDirectory()
+        {
+            // On bootstrap, we won't have any of our directories, create them
+            if (Directory.Exists(PackagesDirectory)) {
+                Utility.DeleteFileOrDirectoryHardOrGiveUp(PackagesDirectory);
+            }
 
-                // Fetch the remote RELEASES file, whether it's a local dir or an
-                // HTTP URL
-                if (Utility.IsHttpUrl(updateUrlOrPath)) {
-                    if (updateUrlOrPath.EndsWith("/")) {
-                        updateUrlOrPath = updateUrlOrPath.Substring(0, updateUrlOrPath.Length - 1);
-                    }
+            Directory.CreateDirectory(PackagesDirectory);
+        }
 
-                    this.Log().Info("Downloading RELEASES file from {0}", updateUrlOrPath);
+        UpdateInfo determineUpdateInfo(UpdaterIntention intention, IEnumerable<ReleaseEntry> localReleases, IEnumerable<ReleaseEntry> remoteReleases, bool ignoreDeltaUpdates)
+        {
+            var packageDirectory = Utility.PackageDirectoryForAppDir(AppDirectory);
+            localReleases = localReleases ?? Enumerable.Empty<ReleaseEntry>();
 
-                    int retries = 3;
+            if (remoteReleases == null) {
+                this.Log().Warn("Release information couldn't be determined due to remote corrupt RELEASES file");
+                throw new Exception("Corrupt remote RELEASES file");
+            }
 
-                retry:
+            var latestFullRelease = Utility.FindCurrentVersion(remoteReleases);
+            var currentRelease = Utility.FindCurrentVersion(localReleases);
 
-                    try {
-                        var uri = Utility.AppendPathToUri(new Uri(updateUrlOrPath), "RELEASES");
+            if (latestFullRelease == currentRelease) {
+                this.Log().Info("No updates, remote and local are the same");
 
-                        if (latestLocalRelease != null) {
-                            uri = Utility.AddQueryParamsToUri(uri, new Dictionary<string, string> {
-                                { "id", latestLocalRelease.PackageName },
-                                { "localVersion", latestLocalRelease.Version.ToString() },
-                                { "arch", Environment.Is64BitOperatingSystem ? "amd64" : "x86" }
-                            });
-                        }
+                var info = UpdateInfo.Create(currentRelease, new[] { latestFullRelease }, packageDirectory);
+                return info;
+            }
 
-                        releaseFile = await urlDownloader.DownloadString(uri.ToString()).ConfigureAwait(false);
-                    } catch (WebException ex) {
-                        this.Log().InfoException("Download resulted in WebException (returning blank release list)", ex);
+            if (ignoreDeltaUpdates) {
+                remoteReleases = remoteReleases.Where(x => !x.IsDelta);
+            }
 
-                        if (retries <= 0) throw;
-                        retries--;
-                        goto retry;
-                    }
-
-                    progress(33);
+            if (!localReleases.Any()) {
+                if (intention == UpdaterIntention.Install) {
+                    this.Log().Info("First run, starting from scratch");
                 } else {
-                    this.Log().Info("Reading RELEASES file from {0}", updateUrlOrPath);
-
-                    if (!Directory.Exists(updateUrlOrPath)) {
-                        var message = String.Format(
-                            "The directory {0} does not exist, something is probably broken with your application",
-                            updateUrlOrPath);
-
-                        throw new Exception(message);
-                    }
-
-                    var fi = new FileInfo(Path.Combine(updateUrlOrPath, "RELEASES"));
-                    if (!fi.Exists) {
-                        var message = String.Format(
-                            "The file {0} does not exist, something is probably broken with your application",
-                            fi.FullName);
-
-                        this.Log().Warn(message);
-
-                        var packages = (new DirectoryInfo(updateUrlOrPath)).GetFiles("*.nupkg");
-                        if (packages.Length == 0) {
-                            throw new Exception(message);
-                        }
-
-                        // NB: Create a new RELEASES file since we've got a directory of packages
-                        ReleaseEntry.WriteReleaseFile(
-                            packages.Select(x => ReleaseEntry.GenerateFromFile(x.FullName)), fi.FullName);
-                    }
-
-                    releaseFile = File.ReadAllText(fi.FullName, Encoding.UTF8);
-                    progress(33);
+                    this.Log().Warn("No local releases found, starting from scratch");
                 }
 
-                var ret = default(UpdateInfo);
-                var remoteReleases = ReleaseEntry.ParseReleaseFileAndApplyStaging(releaseFile, stagingId);
-                progress(66);
+                return UpdateInfo.Create(null, new[] { latestFullRelease }, packageDirectory);
+            }
 
-                if (!remoteReleases.Any()) {
-                    throw new Exception("Remote release File is empty or corrupted");
+            if (localReleases.Max(x => x.Version) > remoteReleases.Max(x => x.Version)) {
+                this.Log().Warn("hwhat, local version is greater than remote version");
+                return UpdateInfo.Create(Utility.FindCurrentVersion(localReleases), new[] { latestFullRelease }, packageDirectory);
+            }
+
+            return UpdateInfo.Create(currentRelease, remoteReleases, packageDirectory);
+        }
+
+        internal Guid? getOrCreateStagedUserId()
+        {
+            var stagedUserIdFile = Path.Combine(PackagesDirectory, ".betaId");
+            var ret = default(Guid);
+
+            try {
+                if (!Guid.TryParse(File.ReadAllText(stagedUserIdFile, Encoding.UTF8), out ret)) {
+                    throw new Exception("File was read but contents were invalid");
                 }
 
-                ret = determineUpdateInfo(intention, localReleases, remoteReleases, ignoreDeltaUpdates);
-
-                progress(100);
+                this.Log().Info("Using existing staging user ID: {0}", ret.ToString());
                 return ret;
+            } catch (Exception ex) {
+                this.Log().DebugException("Couldn't read staging user ID, creating a blank one", ex);
             }
 
-            void initializeClientAppDirectory()
-            {
-                // On bootstrap, we won't have any of our directories, create them
-                var pkgDir = Path.Combine(rootAppDirectory, "packages");
-                if (Directory.Exists(pkgDir)) {
-                    Utility.DeleteFileOrDirectoryHardOrGiveUp(pkgDir);
-                }
+            var prng = new Random();
+            var buf = new byte[4096];
+            prng.NextBytes(buf);
 
-                Directory.CreateDirectory(pkgDir);
-            }
-
-            UpdateInfo determineUpdateInfo(UpdaterIntention intention, IEnumerable<ReleaseEntry> localReleases, IEnumerable<ReleaseEntry> remoteReleases, bool ignoreDeltaUpdates)
-            {
-                var packageDirectory = Utility.PackageDirectoryForAppDir(rootAppDirectory);
-                localReleases = localReleases ?? Enumerable.Empty<ReleaseEntry>();
-
-                if (remoteReleases == null) {
-                    this.Log().Warn("Release information couldn't be determined due to remote corrupt RELEASES file");
-                    throw new Exception("Corrupt remote RELEASES file");
-                }
-
-                var latestFullRelease = Utility.FindCurrentVersion(remoteReleases);
-                var currentRelease = Utility.FindCurrentVersion(localReleases);
-
-                if (latestFullRelease == currentRelease) {
-                    this.Log().Info("No updates, remote and local are the same");
-
-                    var info = UpdateInfo.Create(currentRelease, new[] { latestFullRelease }, packageDirectory);
-                    return info;
-                }
-
-                if (ignoreDeltaUpdates) {
-                    remoteReleases = remoteReleases.Where(x => !x.IsDelta);
-                }
-
-                if (!localReleases.Any()) {
-                    if (intention == UpdaterIntention.Install) {
-                        this.Log().Info("First run, starting from scratch");
-                    } else {
-                        this.Log().Warn("No local releases found, starting from scratch");
-                    }
-
-                    return UpdateInfo.Create(null, new[] { latestFullRelease }, packageDirectory);
-                }
-
-                if (localReleases.Max(x => x.Version) > remoteReleases.Max(x => x.Version)) {
-                    this.Log().Warn("hwhat, local version is greater than remote version");
-                    return UpdateInfo.Create(Utility.FindCurrentVersion(localReleases), new[] { latestFullRelease }, packageDirectory);
-                }
-
-                return UpdateInfo.Create(currentRelease, remoteReleases, packageDirectory);
-            }
-
-            internal Guid? getOrCreateStagedUserId()
-            {
-                var stagedUserIdFile = Path.Combine(rootAppDirectory, "packages", ".betaId");
-                var ret = default(Guid);
-
-                try {
-                    if (!Guid.TryParse(File.ReadAllText(stagedUserIdFile, Encoding.UTF8), out ret)) {
-                        throw new Exception("File was read but contents were invalid");
-                    }
-
-                    this.Log().Info("Using existing staging user ID: {0}", ret.ToString());
-                    return ret;
-                } catch (Exception ex) {
-                    this.Log().DebugException("Couldn't read staging user ID, creating a blank one", ex);
-                }
-
-                var prng = new Random();
-                var buf = new byte[4096];
-                prng.NextBytes(buf);
-
-                ret = Utility.CreateGuidFromHash(buf);
-                try {
-                    File.WriteAllText(stagedUserIdFile, ret.ToString(), Encoding.UTF8);
-                    this.Log().Info("Generated new staging user ID: {0}", ret.ToString());
-                    return ret;
-                } catch (Exception ex) {
-                    this.Log().WarnException("Couldn't write out staging user ID, this user probably shouldn't get beta anything", ex);
-                    return null;
-                }
+            ret = Utility.CreateGuidFromHash(buf);
+            try {
+                File.WriteAllText(stagedUserIdFile, ret.ToString(), Encoding.UTF8);
+                this.Log().Info("Generated new staging user ID: {0}", ret.ToString());
+                return ret;
+            } catch (Exception ex) {
+                this.Log().WarnException("Couldn't write out staging user ID, this user probably shouldn't get beta anything", ex);
+                return null;
             }
         }
     }

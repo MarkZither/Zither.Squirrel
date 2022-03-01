@@ -10,6 +10,7 @@ using Microsoft.Win32;
 using Squirrel.NuGet;
 using Squirrel.SimpleSplat;
 using Squirrel.Shell;
+using System.Net;
 
 namespace Squirrel
 {
@@ -19,11 +20,17 @@ namespace Squirrel
 #endif
     public partial class UpdateManager : IUpdateManager
     {
+        /// <summary>The file name for the releases file</summary>
+        protected const string ReleasesFileName = "RELEASES";
+
         /// <summary>The unique Id of the application.</summary>
         public string AppId => _applicationIdOverride ?? getInstalledApplicationName();
 
         /// <summary>The directory the app is (or will be) installed in.</summary>
         public string AppDirectory => Path.Combine(_localAppDataDirectoryOverride ?? GetLocalAppDataDirectory(), AppId);
+
+        /// <summary>The directory where we store the nuget packages</summary>
+        public string PackagesDirectory => Path.Combine(AppDirectory, "packages");
 
         /// <summary>True if the current executable is inside the target <see cref="AppDirectory"/>.</summary>
         public bool IsInstalledApp => isUpdateExeAvailable() ? Utility.IsFileInDirectory(AssemblyRuntimeInfo.EntryExePath, AppDirectory) : false;
@@ -81,24 +88,6 @@ namespace Squirrel
         ~UpdateManager()
         {
             Dispose();
-        }
-
-        /// <inheritdoc/>
-        public virtual async Task<UpdateInfo> CheckForUpdate(bool ignoreDeltaUpdates = false, Action<int> progress = null, UpdaterIntention intention = UpdaterIntention.Update)
-        {
-            var checkForUpdate = new CheckForUpdateImpl(AppDirectory);
-
-            await acquireUpdateLock().ConfigureAwait(false);
-            return await checkForUpdate.CheckForUpdate(intention, Utility.LocalReleaseFileForAppDir(AppDirectory), _updateUrlOrPath, ignoreDeltaUpdates, progress, _urlDownloader).ConfigureAwait(false);
-        }
-
-        /// <inheritdoc/>
-        public virtual async Task DownloadReleases(IEnumerable<ReleaseEntry> releasesToDownload, Action<int> progress = null)
-        {
-            var downloadReleases = new DownloadReleasesImpl(AppDirectory);
-            await acquireUpdateLock().ConfigureAwait(false);
-
-            await downloadReleases.DownloadReleases(_updateUrlOrPath, releasesToDownload, progress, _urlDownloader).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>
@@ -289,6 +278,95 @@ namespace Squirrel
             await Task.Delay(500).ConfigureAwait(false);
 
             return updateProcess;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="updateUrlOrPath"></param>
+        /// <param name="latestLocalRelease"></param>
+        /// <param name="urlDownloader"></param>
+        /// <returns></returns>
+        protected virtual Task<string> ReadReleasesFile(string updateUrlOrPath, ReleaseEntry latestLocalRelease, IFileDownloader urlDownloader)
+        {
+            if (Utility.IsHttpUrl(updateUrlOrPath)) {
+                return ReadReleasesFileRemotely(updateUrlOrPath, latestLocalRelease, urlDownloader);
+            } else {
+                return ReadReleasesFileLocally(updateUrlOrPath);
+            }
+        }
+
+        Task<string> ReadReleasesFileRemotely(string updateUrlOrPath, ReleaseEntry latestLocalRelease, IFileDownloader urlDownloader)
+        {
+            if (updateUrlOrPath.EndsWith("/")) {
+                updateUrlOrPath = updateUrlOrPath.Substring(0, updateUrlOrPath.Length - 1);
+            }
+
+            this.Log().Info("Downloading RELEASES file from {0}", updateUrlOrPath);
+
+            int retries = 3;
+
+        retry:
+
+            try {
+                var uri = Utility.AppendPathToUri(new Uri(updateUrlOrPath), ReleasesFileName);
+
+                if (latestLocalRelease != null) {
+                    uri = Utility.AddQueryParamsToUri(uri, new Dictionary<string, string> {
+                                { "id", latestLocalRelease.PackageName },
+                                { "localVersion", latestLocalRelease.Version.ToString() },
+                                { "arch", Environment.Is64BitOperatingSystem ? "amd64" : "x86" }
+                            });
+                }
+
+                return urlDownloader.DownloadString(uri.ToString());
+            } catch (WebException ex) {
+                this.Log().InfoException("Download resulted in WebException (returning blank release list)", ex);
+
+                if (retries <= 0) throw;
+                retries--;
+                goto retry;
+            }
+        }
+
+        Task<string> ReadReleasesFileLocally(string updateUrlOrPath)
+        {
+            this.Log().Info("Reading RELEASES file from {0}", updateUrlOrPath);
+
+            if (!Directory.Exists(updateUrlOrPath)) {
+                var message = String.Format(
+                    "The directory {0} does not exist, something is probably broken with your application",
+                    updateUrlOrPath);
+
+                throw new Exception(message);
+            }
+
+            var fi = new FileInfo(Path.Combine(updateUrlOrPath, ReleasesFileName));
+            if (!fi.Exists) {
+                var message = String.Format(
+                    "The file {0} does not exist, something is probably broken with your application",
+                    fi.FullName);
+
+                this.Log().Warn(message);
+
+                CreateLocalReleases(updateUrlOrPath);
+            }
+
+            using FileStream fileStream = new FileStream(fi.FullName, FileMode.Open, FileAccess.Read);
+            using StreamReader reader = new StreamReader(fileStream, Encoding.UTF8);
+            return reader.ReadToEndAsync();
+        }
+
+        void CreateLocalReleases(string releaseDir)
+        {
+            var packages = (new DirectoryInfo(releaseDir)).GetFiles("*.nupkg");
+            if (packages.Length == 0) {
+                throw new Exception("Failed to create RELEASES file as no packages in directory");
+            }
+
+            // NB: Create a new RELEASES file since we've got a directory of packages
+            ReleaseEntry.WriteReleaseFile(
+                packages.Select(x => ReleaseEntry.GenerateFromFile(x.FullName)), Path.Combine(releaseDir, ReleasesFileName));
         }
 
         internal Dictionary<ShortcutLocation, ShellLink> GetShortcutsForExecutable(string exeName, ShortcutLocation locations, string programArguments = null)

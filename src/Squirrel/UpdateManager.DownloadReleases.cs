@@ -9,106 +9,112 @@ namespace Squirrel
 {
     public partial class UpdateManager
     {
-        internal class DownloadReleasesImpl : IEnableLogger
+        /// <inheritdoc/>
+        public virtual async Task DownloadReleases(IEnumerable<ReleaseEntry> releasesToDownload, Action<int> progress = null)
         {
-            readonly string rootAppDirectory;
+            await acquireUpdateLock().ConfigureAwait(false);
 
-            public DownloadReleasesImpl(string rootAppDirectory)
-            {
-                this.rootAppDirectory = rootAppDirectory;
+            double toIncrement = 100.0 / releasesToDownload.Count();
+            ProgressContext progressContext = new(progress ?? (_ => { }), toIncrement);
+
+            await DownloadReleases(_updateUrlOrPath, releasesToDownload, progressContext, _urlDownloader).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="updateUrlOrPath"></param>
+        /// <param name="releasesToDownload"></param>
+        /// <param name="progress"></param>
+        /// <param name="urlDownloader"></param>
+        /// <returns></returns>
+        protected virtual Task DownloadReleases(string updateUrlOrPath, IEnumerable<ReleaseEntry> releasesToDownload, ProgressContext progress, IFileDownloader urlDownloader)
+        {
+            return releasesToDownload.ForEachAsync(async release => {
+                await DownloadRelease(updateUrlOrPath, release, progress, urlDownloader).ConfigureAwait(false);
+            });
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="updateUrlOrPath"></param>
+        /// <param name="release"></param>
+        /// <param name="progress"></param>
+        /// <param name="urlDownloader"></param>
+        /// <returns></returns>
+        protected virtual async Task DownloadRelease(string updateUrlOrPath, ReleaseEntry release, ProgressContext progress, IFileDownloader urlDownloader)
+        {
+            if (Utility.IsHttpUrl(updateUrlOrPath)) {
+                await DownloadReleaseRemotely(updateUrlOrPath, release, progress, urlDownloader).ConfigureAwait(false);
+            } else {
+                DownloadReleaseLocally(updateUrlOrPath, release, progress);
             }
+        }
 
-            public async Task DownloadReleases(string updateUrlOrPath, IEnumerable<ReleaseEntry> releasesToDownload, Action<int> progress = null, IFileDownloader urlDownloader = null)
-            {
-                progress = progress ?? (_ => { });
-                urlDownloader = urlDownloader ?? Utility.CreateDefaultDownloader();
-                var packagesDirectory = Path.Combine(rootAppDirectory, "packages");
+        async Task DownloadReleaseRemotely(string updateUrlOrPath, ReleaseEntry releaseEntry, ProgressContext progress, IFileDownloader urlDownloader)
+        {
+            var targetFile = Path.Combine(PackagesDirectory, releaseEntry.Filename);
+            double component = 0;
 
-                double current = 0;
-                double toIncrement = 100.0 / releasesToDownload.Count();
+            var baseUri = Utility.EnsureTrailingSlash(new Uri(updateUrlOrPath));
 
-                if (Utility.IsHttpUrl(updateUrlOrPath)) {
-                    // From Internet
-                    await releasesToDownload.ForEachAsync(async x => {
-                        var targetFile = Path.Combine(packagesDirectory, x.Filename);
-                        double component = 0;
-                        await downloadRelease(updateUrlOrPath, x, urlDownloader, targetFile, p => {
-                            lock (progress) {
-                                current -= component;
-                                component = toIncrement / 100.0 * p;
-                                progress((int) Math.Round(current += component));
-                            }
-                        }).ConfigureAwait(false);
+            var releaseEntryUrl = releaseEntry.BaseUrl + releaseEntry.Filename;
+            if (!String.IsNullOrEmpty(releaseEntry.Query)) {
+                releaseEntryUrl += releaseEntry.Query;
+            }
+            var sourceFileUrl = new Uri(baseUri, releaseEntryUrl).AbsoluteUri;
+            File.Delete(targetFile);
 
-                        checksumPackage(x);
-                    }).ConfigureAwait(false);
-                } else {
-                    // From Disk
-                    await releasesToDownload.ForEachAsync(x => {
-                        var targetFile = Path.Combine(packagesDirectory, x.Filename);
-
-                        File.Copy(
-                            Path.Combine(updateUrlOrPath, x.Filename),
-                            targetFile,
-                            true);
-
-                        lock (progress) progress((int) Math.Round(current += toIncrement));
-                        checksumPackage(x);
-                    }).ConfigureAwait(false);
+            await urlDownloader.DownloadFile(sourceFileUrl, targetFile, p => {
+                lock (progress) {
+                    progress.Current -= component;
+                    component = progress.IncreamentSize / 100.0 * p;
+                    progress.Increament(component);
                 }
+            }).ConfigureAwait(false);
+
+            checksumPackage(releaseEntry);
+        }
+
+        void DownloadReleaseLocally(string updateUrlOrPath, ReleaseEntry releaseToDownload, ProgressContext progress)
+        {
+            var targetFile = Path.Combine(PackagesDirectory, releaseToDownload.Filename);
+
+            File.Copy(
+                Path.Combine(updateUrlOrPath, releaseToDownload.Filename),
+                targetFile,
+                true);
+
+            progress.Increament();
+            checksumPackage(releaseToDownload);
+        }
+
+        void checksumPackage(ReleaseEntry downloadedRelease)
+        {
+            var targetPackage = new FileInfo(
+                Path.Combine(AppDirectory, "packages", downloadedRelease.Filename));
+
+            if (!targetPackage.Exists) {
+                this.Log().Error("File {0} should exist but doesn't", targetPackage.FullName);
+
+                throw new Exception("Checksummed file doesn't exist: " + targetPackage.FullName);
             }
 
-            bool isReleaseExplicitlyHttp(ReleaseEntry x)
-            {
-                return x.BaseUrl != null &&
-                    Uri.IsWellFormedUriString(x.BaseUrl, UriKind.Absolute);
+            if (targetPackage.Length != downloadedRelease.Filesize) {
+                this.Log().Error("File Length should be {0}, is {1}", downloadedRelease.Filesize, targetPackage.Length);
+                targetPackage.Delete();
+
+                throw new Exception("Checksummed file size doesn't match: " + targetPackage.FullName);
             }
 
-            Task downloadRelease(string updateBaseUrl, ReleaseEntry releaseEntry, IFileDownloader urlDownloader, string targetFile, Action<int> progress)
-            {
-                var baseUri = Utility.EnsureTrailingSlash(new Uri(updateBaseUrl));
+            using (var file = targetPackage.OpenRead()) {
+                var hash = Utility.CalculateStreamSHA1(file);
 
-                var releaseEntryUrl = releaseEntry.BaseUrl + releaseEntry.Filename;
-                if (!String.IsNullOrEmpty(releaseEntry.Query)) {
-                    releaseEntryUrl += releaseEntry.Query;
-                }
-                var sourceFileUrl = new Uri(baseUri, releaseEntryUrl).AbsoluteUri;
-                File.Delete(targetFile);
-
-                return urlDownloader.DownloadFile(sourceFileUrl, targetFile, progress);
-            }
-
-            Task checksumAllPackages(IEnumerable<ReleaseEntry> releasesDownloaded)
-            {
-                return releasesDownloaded.ForEachAsync(x => checksumPackage(x));
-            }
-
-            void checksumPackage(ReleaseEntry downloadedRelease)
-            {
-                var targetPackage = new FileInfo(
-                    Path.Combine(rootAppDirectory, "packages", downloadedRelease.Filename));
-
-                if (!targetPackage.Exists) {
-                    this.Log().Error("File {0} should exist but doesn't", targetPackage.FullName);
-
-                    throw new Exception("Checksummed file doesn't exist: " + targetPackage.FullName);
-                }
-
-                if (targetPackage.Length != downloadedRelease.Filesize) {
-                    this.Log().Error("File Length should be {0}, is {1}", downloadedRelease.Filesize, targetPackage.Length);
+                if (!hash.Equals(downloadedRelease.SHA1, StringComparison.OrdinalIgnoreCase)) {
+                    this.Log().Error("File SHA1 should be {0}, is {1}", downloadedRelease.SHA1, hash);
                     targetPackage.Delete();
-
-                    throw new Exception("Checksummed file size doesn't match: " + targetPackage.FullName);
-                }
-
-                using (var file = targetPackage.OpenRead()) {
-                    var hash = Utility.CalculateStreamSHA1(file);
-
-                    if (!hash.Equals(downloadedRelease.SHA1, StringComparison.OrdinalIgnoreCase)) {
-                        this.Log().Error("File SHA1 should be {0}, is {1}", downloadedRelease.SHA1, hash);
-                        targetPackage.Delete();
-                        throw new Exception("Checksum doesn't match: " + targetPackage.FullName);
-                    }
+                    throw new Exception("Checksum doesn't match: " + targetPackage.FullName);
                 }
             }
         }

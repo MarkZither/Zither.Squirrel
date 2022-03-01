@@ -27,17 +27,20 @@ namespace Squirrel
         /// <param name="authorization">
         /// Text to be sent in the 'Authorization' header of the request.
         /// </param>
-        Task DownloadFile(string url, string targetFile, Action<int> progress, string authorization = null);
+        /// <param name="accept">
+        /// Text to be sent in the 'Accept' header of the request.
+        /// </param>
+        Task DownloadFile(string url, string targetFile, Action<int> progress, string authorization = null, string accept = null);
 
         /// <summary>
         /// Returns a byte array containing the contents of the file at the specified url
         /// </summary>
-        Task<byte[]> DownloadBytes(string url, string authorization = null);
+        Task<byte[]> DownloadBytes(string url, string authorization = null, string accept = null);
 
         /// <summary>
         /// Returns a string containing the contents of the specified url
         /// </summary>
-        Task<string> DownloadString(string url, string authorization = null);
+        Task<string> DownloadString(string url, string authorization = null, string accept = null);
     }
 
     /// <inheritdoc cref="IFileDownloader"/>
@@ -49,9 +52,9 @@ namespace Squirrel
         public static ProductInfoHeaderValue UserAgent => new("Squirrel", AssemblyRuntimeInfo.ExecutingAssemblyName.Version.ToString());
 
         /// <inheritdoc />
-        public virtual async Task DownloadFile(string url, string targetFile, Action<int> progress, string authorization)
+        public virtual async Task DownloadFile(string url, string targetFile, Action<int> progress, string authorization, string accept)
         {
-            using var client = CreateHttpClient(authorization);
+            using var client = CreateHttpClient(authorization, accept);
             try {
                 using (var fs = File.Open(targetFile, FileMode.Create)) {
                     await DownloadToStreamInternal(client, url, fs, progress).ConfigureAwait(false);
@@ -66,9 +69,9 @@ namespace Squirrel
         }
 
         /// <inheritdoc />
-        public virtual async Task<byte[]> DownloadBytes(string url, string authorization)
+        public virtual async Task<byte[]> DownloadBytes(string url, string authorization, string accept)
         {
-            using var client = CreateHttpClient(authorization);
+            using var client = CreateHttpClient(authorization, accept);
             try {
                 return await client.GetByteArrayAsync(url).ConfigureAwait(false);
             } catch {
@@ -79,9 +82,9 @@ namespace Squirrel
         }
 
         /// <inheritdoc />
-        public virtual async Task<string> DownloadString(string url, string authorization)
+        public virtual async Task<string> DownloadString(string url, string authorization, string accept)
         {
-            using var client = CreateHttpClient(authorization);
+            using var client = CreateHttpClient(authorization, accept);
             try {
                 return await client.GetStringAsync(url).ConfigureAwait(false);
             } catch {
@@ -137,7 +140,7 @@ namespace Squirrel
         /// Creates a new <see cref="HttpClient"/> for every request. Override this
         /// function to add a custom proxy or other http configuration.
         /// </summary>
-        protected virtual HttpClient CreateHttpClient(string authorization)
+        protected virtual HttpClient CreateHttpClient(string authorization, string accept)
         {
             var handler = new HttpClientHandler() {
                 AllowAutoRedirect = true,
@@ -148,6 +151,10 @@ namespace Squirrel
             client.DefaultRequestHeaders.UserAgent.Add(UserAgent);
             if (authorization != null)
                 client.DefaultRequestHeaders.Add("Authorization", authorization);
+
+            if(accept != null)
+                client.DefaultRequestHeaders.Add("Accept", accept);
+
             return client;
         }
     }
@@ -157,7 +164,7 @@ namespace Squirrel
     public class FileDownloader : IFileDownloader, IEnableLogger
     {
         /// <inheritdoc />
-        public virtual async Task DownloadFile(string url, string targetFile, Action<int> progress, string authorization)
+        public virtual async Task DownloadFile(string url, string targetFile, Action<int> progress, string authorization, string accept)
         {
             using (var wc = CreateWebClient()) {
                 var failedUrl = default(string);
@@ -196,7 +203,7 @@ namespace Squirrel
         }
 
         /// <inheritdoc />
-        public virtual async Task<byte[]> DownloadBytes(string url, string authorization)
+        public virtual async Task<byte[]> DownloadBytes(string url, string authorization, string accept)
         {
             using (var wc = CreateWebClient()) {
                 var failedUrl = default(string);
@@ -220,7 +227,7 @@ namespace Squirrel
         }
 
         /// <inheritdoc />
-        public virtual async Task<string> DownloadString(string url, string authorization)
+        public virtual async Task<string> DownloadString(string url, string authorization, string accept)
         {
             using (var wc = CreateWebClient()) {
                 var failedUrl = default(string);
