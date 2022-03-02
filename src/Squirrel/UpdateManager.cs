@@ -287,10 +287,10 @@ namespace Squirrel
         /// <param name="latestLocalRelease"></param>
         /// <param name="urlDownloader"></param>
         /// <returns></returns>
-        protected virtual Task<string> ReadReleasesFile(string updateUrlOrPath, ReleaseEntry latestLocalRelease, IFileDownloader urlDownloader)
+        protected virtual async Task<string> ReadReleasesFile(string updateUrlOrPath, ReleaseEntry latestLocalRelease, IFileDownloader urlDownloader)
         {
             if (Utility.IsHttpUrl(updateUrlOrPath)) {
-                return ReadReleasesFileRemotely(updateUrlOrPath, latestLocalRelease, urlDownloader);
+                return await ReadReleasesFileRemotely(updateUrlOrPath, latestLocalRelease, urlDownloader).ConfigureAwait(false);
             } else {
                 return ReadReleasesFileLocally(updateUrlOrPath);
             }
@@ -329,7 +329,7 @@ namespace Squirrel
             }
         }
 
-        Task<string> ReadReleasesFileLocally(string updateUrlOrPath)
+        string ReadReleasesFileLocally(string updateUrlOrPath)
         {
             this.Log().Info("Reading RELEASES file from {0}", updateUrlOrPath);
 
@@ -352,9 +352,7 @@ namespace Squirrel
                 CreateLocalReleases(updateUrlOrPath);
             }
 
-            using FileStream fileStream = new FileStream(fi.FullName, FileMode.Open, FileAccess.Read);
-            using StreamReader reader = new StreamReader(fileStream, Encoding.UTF8);
-            return reader.ReadToEndAsync();
+            return File.ReadAllText(fi.FullName);
         }
 
         void CreateLocalReleases(string releaseDir)
