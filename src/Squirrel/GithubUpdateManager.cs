@@ -90,7 +90,6 @@ namespace Squirrel
 
             string targetFile = Path.Combine(PackagesDirectory, release.Filename);
 
-            // TODO: Handle progress
             await client.DownloadAsset(latest, release.Filename, targetFile);
         }
     }
