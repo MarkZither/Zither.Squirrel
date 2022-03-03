@@ -19,7 +19,6 @@ namespace Squirrel
 #endif
     public class GithubUpdateManager : UpdateManager
     {
-        private readonly string _repoUrl;
         private readonly string _accessToken;
         private readonly bool _prerelease;
 
@@ -58,9 +57,8 @@ namespace Squirrel
             string applicationIdOverride = null,
             string localAppDataDirectoryOverride = null,
             IFileDownloader urlDownloader = null)
-            : base(null, applicationIdOverride, localAppDataDirectoryOverride, urlDownloader)
+            : base(repoUrl, applicationIdOverride, localAppDataDirectoryOverride, urlDownloader)
         {
-            _updateUrlOrPath = _repoUrl = repoUrl;
             _accessToken = accessToken;
             _prerelease = prerelease;
         }
