@@ -281,11 +281,11 @@ namespace Squirrel
         }
 
         /// <summary>
-        /// 
+        /// Read the contents of the RELEASES file 
         /// </summary>
-        /// <param name="updateUrlOrPath"></param>
-        /// <param name="latestLocalRelease"></param>
-        /// <param name="urlDownloader"></param>
+        /// <param name="updateUrlOrPath">Source for updates</param>
+        /// <param name="latestLocalRelease">The lastest local release</param>
+        /// <param name="urlDownloader">Handler for pulling files</param>
         /// <returns></returns>
         protected virtual async Task<string> ReadReleasesFile(string updateUrlOrPath, ReleaseEntry latestLocalRelease, IFileDownloader urlDownloader)
         {

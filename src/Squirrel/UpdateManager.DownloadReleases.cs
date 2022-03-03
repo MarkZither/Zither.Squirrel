@@ -21,12 +21,12 @@ namespace Squirrel
         }
 
         /// <summary>
-        /// 
+        /// Download all specified releases
         /// </summary>
-        /// <param name="updateUrlOrPath"></param>
-        /// <param name="releasesToDownload"></param>
-        /// <param name="progress"></param>
-        /// <param name="urlDownloader"></param>
+        /// <param name="updateUrlOrPath">Source for updates</param>
+        /// <param name="releasesToDownload">All of the releases to be downloaded</param>
+        /// <param name="progress">Progress state</param>
+        /// <param name="urlDownloader">Handler for pulling files</param>
         /// <returns></returns>
         protected virtual Task DownloadReleases(string updateUrlOrPath, IEnumerable<ReleaseEntry> releasesToDownload, ProgressContext progress, IFileDownloader urlDownloader)
         {
@@ -36,12 +36,12 @@ namespace Squirrel
         }
 
         /// <summary>
-        /// 
+        /// Download a specific release
         /// </summary>
-        /// <param name="updateUrlOrPath"></param>
-        /// <param name="release"></param>
-        /// <param name="progress"></param>
-        /// <param name="urlDownloader"></param>
+        /// <param name="updateUrlOrPath">Source for updates</param>
+        /// <param name="release">The release to download</param>
+        /// <param name="progress">Progress state</param>
+        /// <param name="urlDownloader">Handler for pulling files</param>
         /// <returns></returns>
         protected virtual async Task DownloadRelease(string updateUrlOrPath, ReleaseEntry release, ProgressContext progress, IFileDownloader urlDownloader)
         {
