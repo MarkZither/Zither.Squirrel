@@ -159,7 +159,7 @@ namespace Squirrel
             }
         }
 
-        /// <summary> Represents a modern DOTNET runtime where versions are deployed independenly of the operating system </summary>
+        /// <summary> Represents a modern DOTNET runtime where versions are deployed independently of the operating system </summary>
         public class DotnetInfo : RuntimeInfo
         {
             /// <inheritdoc/>
@@ -186,10 +186,10 @@ namespace Squirrel
                 CpuArchitecture = architecture;
                 if (minversion.Major == 6 && minversion.Build < 0) {
                     Log.Warn(
-                        $"Automatically upgrading minimum dotnet version from net{minversion} to net6.0.2, " +
+                        $"Automatically upgrading minimum dotnet version from net{minversion} to net6.0.7, " +
                         $"see more at https://github.com/dotnet/core/issues/7176. " +
                         $"If you would like to stop this behavior, please specify '--framework net6.0.0'");
-                    MinVersion = new NuGetVersion(6, 0, 2);
+                    MinVersion = new NuGetVersion(6, 0, 7);
                 }
             }
 
