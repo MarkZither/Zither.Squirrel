@@ -3,7 +3,7 @@ name: Build Squirrel
 on: [ push, pull_request ]
 
 env:
-  DOTNET_VERSION: '6.0.301'
+  DOTNET_VERSION: '6.0.302'
 
 jobs:
   build-windows:
