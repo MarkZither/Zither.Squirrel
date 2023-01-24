@@ -79,7 +79,7 @@ namespace Squirrel.Sources
             // releaseUri can be a relative url (eg. "MyPackage.nupkg") or it can be an 
             // absolute url (eg. "https://example.com/MyPackage.nupkg"). In the former case
             var sourceBaseUri = Utility.EnsureTrailingSlash(BaseUri);
-            var source = new Uri(sourceBaseUri, releaseUri).ToString();
+            var source = Utility.AppendPathToUri(sourceBaseUri, releaseUri).ToString();
 
             this.Log().Info($"Downloading '{releaseEntry.Filename}' from '{source}'.");
             return Downloader.DownloadFile(source, localFile, progress);
