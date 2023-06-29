@@ -100,22 +100,26 @@ namespace Squirrel
         /// CheckForUpdate</param>
         /// <param name="progress">A Observer which can be used to report Progress - 
         /// will return values from 0-100 and Complete, or Throw</param>
+        /// <param name="preferPackageNameForShortcut">Prefer the package product name, rather than assembly product name, for the shortcut name</param>
         /// <returns>The path to the installed application (i.e. the path where
         /// your package's contents ended up</returns>
-        Task<string> ApplyReleases(UpdateInfo updateInfo, Action<int> progress = null);
+
+        Task<string> ApplyReleases(UpdateInfo updateInfo, Action<int> progress = null, bool preferPackageNameForShortcut = false);
 
         /// <summary>
         /// Completely Installs a targeted app
         /// </summary>
         /// <param name="silentInstall">If true, don't run the app once install completes.</param>
         /// <param name="progress">A Observer which can be used to report Progress - 
+        /// <param name="preferPackageNameForShortcut">Prefer the package product name, rather than assembly product name, for the shortcut name</param>
         /// will return values from 0-100 and Complete, or Throw</param>
-        Task FullInstall(bool silentInstall, Action<int> progress = null);
+        Task FullInstall(bool silentInstall, Action<int> progress = null, bool preferPackageNameForShortcut = false);
 
         /// <summary>
         /// Completely uninstalls the targeted app
         /// </summary>
-        Task FullUninstall();
+        /// <param name="preferPackageNameForShortcut">Prefer the package product name, rather than assembly product name, for the shortcut name</param>
+        Task FullUninstall(bool preferPackageNameForShortcut = false);
 
         /// <summary>
         /// Kills all the executables in the target install directory, excluding
@@ -175,7 +179,8 @@ namespace Squirrel
         /// during app update.</param>
         /// <param name="programArguments">The arguments to code into the shortcut</param>
         /// <param name="icon">The shortcut icon</param>
-        void CreateShortcutsForExecutable(string exeName, ShortcutLocation locations, bool updateOnly, string programArguments, string icon);
+        /// <param name="preferPackageName">Prefer the package product name, rather than assembly product name, for the shortcut name</param>
+        void CreateShortcutsForExecutable(string exeName, ShortcutLocation locations, bool updateOnly, string programArguments, string icon, bool preferPackageName);
 
         /// <summary>
         /// Removes shortcuts created by CreateShortcutsForExecutable
@@ -183,7 +188,8 @@ namespace Squirrel
         /// <param name="exeName">The name of the executable, relative to the
         /// app install directory.</param>
         /// <param name="locations">The locations to install the shortcut</param>
-        void RemoveShortcutsForExecutable(string exeName, ShortcutLocation locations);
+        /// <param name="preferPackageName">Prefer the package product name, rather than assembly product name, for the shortcut name</param>
+        void RemoveShortcutsForExecutable(string exeName, ShortcutLocation locations, bool preferPackageName);
 
         /// <summary>
         /// Sets the AppUserModelID of the current process to match that which was added to the 
@@ -250,24 +256,26 @@ namespace Squirrel
         /// Create a shortcut to the currently running executable at the specified locations. 
         /// See <see cref="IAppTools.CreateShortcutsForExecutable"/> to create a shortcut to a different program
         /// </summary>
-        public static void CreateShortcutForThisExe(this IAppTools This, ShortcutLocation location = ShortcutLocation.Desktop | ShortcutLocation.StartMenu)
+        public static void CreateShortcutForThisExe(this IAppTools This, ShortcutLocation location = ShortcutLocation.Desktop | ShortcutLocation.StartMenu, bool preferPackageName = false)
         {
             This.CreateShortcutsForExecutable(
                 Path.GetFileName(SquirrelRuntimeInfo.EntryExePath),
                 location,
                 Environment.CommandLine.Contains("squirrel-install") == false,
                 null,  // shortcut arguments 
-                null); // shortcut icon
+                null, 
+                preferPackageName); // shortcut icon
         }
 
         /// <summary>
         /// Removes a shortcut for the currently running executable at the specified locations.
         /// </summary>
-        public static void RemoveShortcutForThisExe(this IAppTools This, ShortcutLocation location = ShortcutLocation.Desktop | ShortcutLocation.StartMenu)
+        public static void RemoveShortcutForThisExe(this IAppTools This, ShortcutLocation location = ShortcutLocation.Desktop | ShortcutLocation.StartMenu, bool preferPackageName = false)
         {
             This.RemoveShortcutsForExecutable(
                 Path.GetFileName(SquirrelRuntimeInfo.EntryExePath),
-                location);
+                location, 
+                preferPackageName);
         }
     }
 }

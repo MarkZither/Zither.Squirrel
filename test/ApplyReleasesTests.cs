@@ -277,7 +277,7 @@ namespace Squirrel.Tests
 
                 var progress = new List<int>();
 
-                await fixture.ApplyReleases(updateInfo, false, false, progress.Add);
+                await fixture.ApplyReleases(updateInfo, false, false, false, progress.Add);
                 this.Log().Info("Progress: [{0}]", String.Join(",", progress));
 
                 progress
@@ -325,7 +325,7 @@ namespace Squirrel.Tests
                 updateInfo.ReleasesToApply.Contains(latestFullEntry).ShouldBeTrue();
 
                 var progress = new List<int>();
-                await fixture.ApplyReleases(updateInfo, false, false, progress.Add);
+                await fixture.ApplyReleases(updateInfo, false, false, false, progress.Add);
                 this.Log().Info("Progress: [{0}]", String.Join(",", progress));
 
                 progress
@@ -373,7 +373,7 @@ namespace Squirrel.Tests
                 updateInfo.ReleasesToApply.Contains(latestFullEntry).ShouldBeTrue();
 
                 var progress = new List<int>();
-                await fixture.ApplyReleases(updateInfo, false, false, progress.Add);
+                await fixture.ApplyReleases(updateInfo, false, false, false, progress.Add);
                 this.Log().Info("Progress: [{0}]", String.Join(",", progress));
 
                 progress
@@ -426,7 +426,7 @@ namespace Squirrel.Tests
 
                 var progress = new List<int>();
 
-                await fixture.ApplyReleases(updateInfo, false, false, progress.Add);
+                await fixture.ApplyReleases(updateInfo, false, false, false, progress.Add);
                 this.Log().Info("Progress: [{0}]", String.Join(",", progress));
 
                 progress
@@ -493,11 +493,37 @@ namespace Squirrel.Tests
                 }
 
                 var fixture = new UpdateManager.ApplyReleasesImpl(Path.Combine(path, "theApp"));
-                fixture.CreateShortcutsForExecutable("SquirrelAwareApp.exe", ShortcutLocation.Desktop | ShortcutLocation.StartMenu | ShortcutLocation.Startup | ShortcutLocation.AppRoot, false, null, null);
+                fixture.CreateShortcutsForExecutable("SquirrelAwareApp.exe", ShortcutLocation.Desktop | ShortcutLocation.StartMenu | ShortcutLocation.Startup | ShortcutLocation.AppRoot, false, null, null, false);
 
                 // NB: COM is Weird.
                 Thread.Sleep(1000);
-                fixture.RemoveShortcutsForExecutable("SquirrelAwareApp.exe", ShortcutLocation.Desktop | ShortcutLocation.StartMenu | ShortcutLocation.Startup | ShortcutLocation.AppRoot);
+                fixture.RemoveShortcutsForExecutable("SquirrelAwareApp.exe", ShortcutLocation.Desktop | ShortcutLocation.StartMenu | ShortcutLocation.Startup | ShortcutLocation.AppRoot, false);
+
+                // NB: Squirrel-Aware first-run might still be running, slow
+                // our roll before blowing away the temp path
+                Thread.Sleep(1000);
+            }
+        }
+
+        [Fact]
+        public async Task CreateShortcutsRoundTripUsingPackageName()
+        {
+            string remotePkgPath;
+            string path;
+
+            using (Utility.WithTempDirectory(out path)) {
+                using (Utility.WithTempDirectory(out remotePkgPath))
+                using (var mgr = new UpdateManager(remotePkgPath, "theApp", path)) {
+                    IntegrationTestHelper.CreateFakeInstalledApp("1.0.0.1", remotePkgPath);
+                    await mgr.FullInstall();
+                }
+
+                var fixture = new UpdateManager.ApplyReleasesImpl(Path.Combine(path, "theApp"));
+                fixture.CreateShortcutsForExecutable("SquirrelAwareApp.exe", ShortcutLocation.Desktop | ShortcutLocation.StartMenu | ShortcutLocation.Startup | ShortcutLocation.AppRoot, false, null, null, true);
+
+                // NB: COM is Weird.
+                Thread.Sleep(1000);
+                fixture.RemoveShortcutsForExecutable("SquirrelAwareApp.exe", ShortcutLocation.Desktop | ShortcutLocation.StartMenu | ShortcutLocation.Startup | ShortcutLocation.AppRoot, true);
 
                 // NB: Squirrel-Aware first-run might still be running, slow
                 // our roll before blowing away the temp path
@@ -530,9 +556,35 @@ namespace Squirrel.Tests
                 }
 
                 var fixture = new UpdateManager.ApplyReleasesImpl(Path.Combine(path, "theApp"));
-                var result = fixture.GetShortcutsForExecutable("SquirrelAwareApp.exe", ShortcutLocation.Desktop | ShortcutLocation.StartMenu | ShortcutLocation.Startup, null);
+                var result = fixture.GetShortcutsForExecutable("SquirrelAwareApp.exe", ShortcutLocation.Desktop | ShortcutLocation.StartMenu | ShortcutLocation.Startup, null, false);
 
                 Assert.Equal(3, result.Keys.Count);
+                Assert.Equal("PublishSingleFileAwareApp.lnk", new FileInfo(result[result.Keys.First()].ShortCutFile).Name);
+
+                // NB: Squirrel-Aware first-run might still be running, slow
+                // our roll before blowing away the temp path
+                Thread.Sleep(1000);
+            }
+        }
+
+        [Fact]
+        public async Task GetShortcutsSmokeTestUsingPackageName()
+        {
+            string remotePkgPath;
+            string path;
+
+            using (Utility.WithTempDirectory(out path)) {
+                using (Utility.WithTempDirectory(out remotePkgPath))
+                using (var mgr = new UpdateManager(remotePkgPath, "theApp", path)) {
+                    IntegrationTestHelper.CreateFakeInstalledApp("1.0.0.1", remotePkgPath);
+                    await mgr.FullInstall();
+                }
+
+                var fixture = new UpdateManager.ApplyReleasesImpl(Path.Combine(path, "theApp"));
+                var result = fixture.GetShortcutsForExecutable("SquirrelAwareApp.exe", ShortcutLocation.Desktop | ShortcutLocation.StartMenu | ShortcutLocation.Startup, null, true);
+
+                Assert.Equal(3, result.Keys.Count);
+                Assert.Equal("SquirrelInstalledApp.lnk", new FileInfo(result[result.Keys.First()].ShortCutFile).Name);
 
                 // NB: Squirrel-Aware first-run might still be running, slow
                 // our roll before blowing away the temp path

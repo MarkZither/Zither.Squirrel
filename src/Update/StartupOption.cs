@@ -21,6 +21,7 @@ namespace Squirrel.Update
         internal string shortcutArgs { get; private set; } = default(string);
         internal bool shouldWait { get; private set; } = false;
         internal bool onlyUpdateShortcuts { get; private set; } = false;
+        internal bool preferPackageNameForShortcut { get; private set; } = false;
         internal bool checkInstall { get; private set; } = false;
         internal bool silentInstall { get; private set; } = false;
 
@@ -53,6 +54,7 @@ namespace Squirrel.Update
                 { "i=|icon", "Path to an ICO file that will be used for icon shortcuts", v => icon = v},
                 { "l=|shortcut-locations=", "Comma-separated string of shortcut locations, e.g. 'Desktop,StartMenu'", v => shortcutArgs = v},
                 { "updateOnly", "Update shortcuts that already exist, rather than creating new ones", _ => onlyUpdateShortcuts = true},
+                { "preferPackageNameForShortcut", "Prefer the package product name, rather than exe product name, for the shortcut name", _ => preferPackageNameForShortcut = true},
 
                 // hidden arguments, used internally by Squirrel and should not be used by Squirrel applications themselves
                 { "install=", "Install the app whose package is in the specified directory or url", v => { updateAction = UpdateAction.Install; target = v; }, true },

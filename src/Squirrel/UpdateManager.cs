@@ -116,16 +116,16 @@ namespace Squirrel
         }
 
         /// <inheritdoc/>
-        public async Task<string> ApplyReleases(UpdateInfo updateInfo, Action<int> progress = null)
+        public async Task<string> ApplyReleases(UpdateInfo updateInfo, Action<int> progress = null, bool preferPackageNameForShortcut = false)
         {
             var applyReleases = new ApplyReleasesImpl(AppDirectory);
             await acquireUpdateLock().ConfigureAwait(false);
 
-            return await applyReleases.ApplyReleases(updateInfo, false, false, progress).ConfigureAwait(false);
+            return await applyReleases.ApplyReleases(updateInfo, false, false, preferPackageNameForShortcut, progress).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>
-        public async Task FullInstall(bool silentInstall = false, Action<int> progress = null)
+        public async Task FullInstall(bool silentInstall = false, Action<int> progress = null, bool preferPackageNameForShortcut = false)
         {
             var updateInfo = await CheckForUpdate(intention: UpdaterIntention.Install).ConfigureAwait(false);
             await DownloadReleases(updateInfo.ReleasesToApply).ConfigureAwait(false);
@@ -133,17 +133,17 @@ namespace Squirrel
             var applyReleases = new ApplyReleasesImpl(AppDirectory);
             await acquireUpdateLock().ConfigureAwait(false);
 
-            await applyReleases.ApplyReleases(updateInfo, silentInstall, true, progress).ConfigureAwait(false);
+            await applyReleases.ApplyReleases(updateInfo, silentInstall, true, preferPackageNameForShortcut, progress).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>
-        public async Task FullUninstall()
+        public async Task FullUninstall(bool preferPackageNameForShortcut = false)
         {
             var applyReleases = new ApplyReleasesImpl(AppDirectory);
             await acquireUpdateLock().ConfigureAwait(false);
 
             this.KillAllExecutablesBelongingToPackage();
-            await applyReleases.FullUninstall().ConfigureAwait(false);
+            await applyReleases.FullUninstall(preferPackageNameForShortcut).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>
@@ -168,17 +168,17 @@ namespace Squirrel
         }
 
         /// <inheritdoc/>
-        public void CreateShortcutsForExecutable(string exeName, ShortcutLocation locations, bool updateOnly, string programArguments = null, string icon = null)
+        public void CreateShortcutsForExecutable(string exeName, ShortcutLocation locations, bool updateOnly, string programArguments = null, string icon = null, bool preferPackageName = false)
         {
             var installHelpers = new ApplyReleasesImpl(AppDirectory);
-            installHelpers.CreateShortcutsForExecutable(exeName, locations, updateOnly, programArguments, icon);
+            installHelpers.CreateShortcutsForExecutable(exeName, locations, updateOnly, programArguments, icon, preferPackageName);
         }
 
         /// <inheritdoc/>
-        public void RemoveShortcutsForExecutable(string exeName, ShortcutLocation locations)
+        public void RemoveShortcutsForExecutable(string exeName, ShortcutLocation locations, bool preferPackageName)
         {
             var installHelpers = new ApplyReleasesImpl(AppDirectory);
-            installHelpers.RemoveShortcutsForExecutable(exeName, locations);
+            installHelpers.RemoveShortcutsForExecutable(exeName, locations, preferPackageName);
         }
 
         /// <inheritdoc/>
@@ -330,10 +330,10 @@ namespace Squirrel
             return updateProcess;
         }
 
-        internal Dictionary<ShortcutLocation, ShellLink> GetShortcutsForExecutable(string exeName, ShortcutLocation locations, string programArguments = null)
+        internal Dictionary<ShortcutLocation, ShellLink> GetShortcutsForExecutable(string exeName, ShortcutLocation locations, string programArguments = null, bool preferPackageName = false)
         {
             var installHelpers = new ApplyReleasesImpl(AppDirectory);
-            return installHelpers.GetShortcutsForExecutable(exeName, locations, programArguments);
+            return installHelpers.GetShortcutsForExecutable(exeName, locations, programArguments, preferPackageName);
         }
 
         private static string GetLocalAppDataDirectory(string assemblyLocation = null)

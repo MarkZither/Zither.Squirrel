@@ -82,7 +82,7 @@ namespace Squirrel.Update
             switch (opt.updateAction) {
             case UpdateAction.Setup:
                 try {
-                    Setup(opt.target, opt.silentInstall, opt.checkInstall).Wait();
+                    Setup(opt.target, opt.silentInstall, opt.checkInstall, opt.preferPackageNameForShortcut).Wait();
                 } catch (Exception ex) when (!opt.silentInstall && !opt.checkInstall) {
                     // when not in silent mode, we should endeavor to show a message.
                     // we will also exit code 0, so Setup.exe does not think
@@ -99,7 +99,7 @@ namespace Squirrel.Update
                 break;
             case UpdateAction.Install:
                 var progressSource = new ProgressSource();
-                Install(opt.silentInstall, progressSource, Path.GetFullPath(opt.target)).Wait();
+                Install(opt.silentInstall, opt.preferPackageNameForShortcut, progressSource, Path.GetFullPath(opt.target)).Wait();
                 break;
             case UpdateAction.Uninstall:
                 Uninstall().Wait();
@@ -108,7 +108,7 @@ namespace Squirrel.Update
                 Console.WriteLine(Download(opt.target).Result);
                 break;
             case UpdateAction.Update:
-                Update(opt.target).Wait();
+                Update(opt.target, opt.preferPackageNameForShortcut).Wait();
                 break;
             case UpdateAction.CheckForUpdate:
                 Console.WriteLine(CheckForUpdate(opt.target).Result);
@@ -117,10 +117,10 @@ namespace Squirrel.Update
                 UpdateSelf().Wait();
                 break;
             case UpdateAction.Shortcut:
-                Shortcut(opt.target, opt.shortcutArgs, opt.processStartArgs, opt.icon, opt.onlyUpdateShortcuts);
+                Shortcut(opt.target, opt.shortcutArgs, opt.processStartArgs, opt.icon, opt.onlyUpdateShortcuts, opt.preferPackageNameForShortcut);
                 break;
             case UpdateAction.Deshortcut:
-                Deshortcut(opt.target, opt.shortcutArgs);
+                Deshortcut(opt.target, opt.shortcutArgs, opt.preferPackageNameForShortcut);
                 break;
             case UpdateAction.ProcessStart:
                 ProcessStart(opt.processStart, opt.processStartArgs, opt.shouldWait);
@@ -131,7 +131,7 @@ namespace Squirrel.Update
             return 0;
         }
 
-        static async Task Setup(string setupPath, bool silentInstall, bool checkInstall)
+        static async Task Setup(string setupPath, bool silentInstall, bool checkInstall, bool preferPackageNameForShortcut)
         {
             Log.Info($"Extracting bundled app data from '{setupPath}'.");
 
@@ -256,10 +256,10 @@ namespace Squirrel.Update
             };
 
             splash.SetMessage(null);
-            await Install(silentInstall, progressSource, tempFolder);
+            await Install(silentInstall, preferPackageNameForShortcut, progressSource, tempFolder);
         }
 
-        static async Task Install(bool silentInstall, ProgressSource progressSource, string sourceDirectory = null)
+        static async Task Install(bool silentInstall, bool preferPackageNameForShortcut, ProgressSource progressSource, string sourceDirectory = null)
         {
             sourceDirectory = sourceDirectory ?? SquirrelRuntimeInfo.BaseDirectory;
             var releasesPath = Path.Combine(sourceDirectory, "RELEASES");
@@ -306,14 +306,14 @@ namespace Squirrel.Update
                 Log.ErrorIfThrows(() => File.Copy(SquirrelRuntimeInfo.EntryExePath, updateTarget, true),
                     "Failed to copy Update.exe to " + updateTarget);
 
-                await mgr.FullInstall(silentInstall, progressSource.Raise);
+                await mgr.FullInstall(silentInstall, progressSource.Raise, preferPackageNameForShortcut);
 
                 await Log.ErrorIfThrows(() => mgr.CreateUninstallerRegistryEntry(),
                     "Failed to create uninstaller registry entry");
             }
         }
 
-        static async Task Update(string updateUrl, string appName = null)
+        static async Task Update(string updateUrl, bool preferPackageNameForShortcut, string appName = null)
         {
             appName = appName ?? getAppNameFromDirectory();
 
@@ -332,7 +332,7 @@ namespace Squirrel.Update
                     await mgr.DownloadReleases(updateInfo.ReleasesToApply, x => Console.WriteLine(UpdateManager.CalculateProgress(x, 3, 30)));
 
                     // 30 - 100 %
-                    await mgr.ApplyReleases(updateInfo, x => Console.WriteLine(UpdateManager.CalculateProgress(x, 30, 100)));
+                    await mgr.ApplyReleases(updateInfo, x => Console.WriteLine(UpdateManager.CalculateProgress(x, 30, 100)), preferPackageNameForShortcut);
                 } catch (Exception ex) {
                     if (ignoreDeltaUpdates) {
                         Log.ErrorException("Really couldn't apply updates!", ex);
@@ -430,7 +430,7 @@ namespace Squirrel.Update
             }
         }
 
-        static void Shortcut(string exeName, string shortcutArgs, string processStartArgs, string icon, bool onlyUpdate)
+        static void Shortcut(string exeName, string shortcutArgs, string processStartArgs, string icon, bool onlyUpdate, bool preferPackageName)
         {
             if (String.IsNullOrWhiteSpace(exeName)) {
                 ShowHelp();
@@ -442,11 +442,11 @@ namespace Squirrel.Update
             var locations = parseShortcutLocations(shortcutArgs);
 
             using (var mgr = new UpdateManager("", appName)) {
-                mgr.CreateShortcutsForExecutable(exeName, locations ?? defaultLocations, onlyUpdate, processStartArgs, icon);
+                mgr.CreateShortcutsForExecutable(exeName, locations ?? defaultLocations, onlyUpdate, processStartArgs, icon, preferPackageName);
             }
         }
 
-        static void Deshortcut(string exeName, string shortcutArgs)
+        static void Deshortcut(string exeName, string shortcutArgs, bool preferPackageName)
         {
             if (String.IsNullOrWhiteSpace(exeName)) {
                 ShowHelp();
@@ -458,7 +458,7 @@ namespace Squirrel.Update
             var locations = parseShortcutLocations(shortcutArgs);
 
             using (var mgr = new UpdateManager("", appName)) {
-                mgr.RemoveShortcutsForExecutable(exeName, locations ?? defaultLocations);
+                mgr.RemoveShortcutsForExecutable(exeName, locations ?? defaultLocations, preferPackageName);
             }
         }
 

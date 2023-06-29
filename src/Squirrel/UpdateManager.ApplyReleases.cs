@@ -26,7 +26,7 @@ namespace Squirrel
                 this.rootAppDirectory = rootAppDirectory;
             }
 
-            public async Task<string> ApplyReleases(UpdateInfo updateInfo, bool silentInstall, bool attemptingFullInstall, Action<int> progress = null)
+            public async Task<string> ApplyReleases(UpdateInfo updateInfo, bool silentInstall, bool attemptingFullInstall, bool preferPackageNameForShortcut, Action<int> progress = null)
             {
                 progress = progress ?? (_ => { });
 
@@ -40,7 +40,7 @@ namespace Squirrel
                 if (release == null) {
                     if (attemptingFullInstall) {
                         this.Log().Info("No release to install, running the app");
-                        await invokePostInstall(updateInfo.CurrentlyInstalledVersion.Version, false, true, silentInstall).ConfigureAwait(false);
+                        await invokePostInstall(updateInfo.CurrentlyInstalledVersion.Version, false, true, silentInstall, preferPackageNameForShortcut).ConfigureAwait(false);
                     }
 
                     progress(100);
@@ -63,7 +63,7 @@ namespace Squirrel
 
                 progress(90);
 
-                await this.ErrorIfThrows(() => invokePostInstall(newVersion, attemptingFullInstall, false, silentInstall),
+                await this.ErrorIfThrows(() => invokePostInstall(newVersion, attemptingFullInstall, false, silentInstall, preferPackageNameForShortcut),
                     "Failed to invoke post-install").ConfigureAwait(false);
 
                 progress(95);
@@ -92,7 +92,7 @@ namespace Squirrel
                 return ret;
             }
 
-            public async Task FullUninstall()
+            public async Task FullUninstall(bool preferPackageNameForShortcut)
             {
                 var releases = getReleases();
                 if (!releases.Any())
@@ -125,7 +125,7 @@ namespace Squirrel
                                 }
                             }, 1 /*at a time*/).ConfigureAwait(false);
                         } else {
-                            allApps.ForEach(x => RemoveShortcutsForExecutable(x.Name, ShortcutLocation.StartMenu | ShortcutLocation.Desktop));
+                            allApps.ForEach(x => RemoveShortcutsForExecutable(x.Name, ShortcutLocation.StartMenu | ShortcutLocation.Desktop, preferPackageNameForShortcut));
                         }
                     } catch (Exception ex) {
                         this.Log().WarnException("Failed to run pre-uninstall hooks, uninstalling anyways", ex);
@@ -150,7 +150,7 @@ namespace Squirrel
                 File.WriteAllText(Path.Combine(rootAppDirectory, ".dead"), " ");
             }
 
-            public Dictionary<ShortcutLocation, ShellLink> GetShortcutsForExecutable(string exeName, ShortcutLocation locations, string programArguments)
+            public Dictionary<ShortcutLocation, ShellLink> GetShortcutsForExecutable(string exeName, ShortcutLocation locations, string programArguments, bool preferPackageName)
             {
                 this.Log().Info("About to create shortcuts for {0}, rootAppDir {1}", exeName, rootAppDirectory);
 
@@ -168,7 +168,7 @@ namespace Squirrel
                 foreach (var f in (ShortcutLocation[]) Enum.GetValues(typeof(ShortcutLocation))) {
                     if (!locations.HasFlag(f)) continue;
 
-                    var file = linkTargetForVersionInfo(f, zf, fileVerInfo);
+                    var file = linkTargetForVersionInfo(f, zf, fileVerInfo, preferPackageName);
                     var appUserModelId = Utility.GetAppUserModelId(zf.Id, exeName);
                     var toastActivatorCLSDID = Utility.CreateGuidFromHash(appUserModelId).ToString();
 
@@ -177,6 +177,7 @@ namespace Squirrel
 
                     var target = Path.Combine(rootAppDirectory, exeName);
                     var sl = new ShellLink {
+                        ShortCutFile = file,
                         Target = target,
                         IconPath = target,
                         IconIndex = 0,
@@ -197,7 +198,7 @@ namespace Squirrel
                 return ret;
             }
 
-            public void CreateShortcutsForExecutable(string exeName, ShortcutLocation locations, bool updateOnly, string programArguments, string icon)
+            public void CreateShortcutsForExecutable(string exeName, ShortcutLocation locations, bool updateOnly, string programArguments, string icon, bool preferPackageName)
             {
                 this.Log().Info("About to create shortcuts for {0}, rootAppDir {1}", exeName, rootAppDirectory);
 
@@ -214,7 +215,7 @@ namespace Squirrel
                 foreach (var f in (ShortcutLocation[]) Enum.GetValues(typeof(ShortcutLocation))) {
                     if (!locations.HasFlag(f)) continue;
 
-                    var file = linkTargetForVersionInfo(f, zf, fileVerInfo);
+                    var file = linkTargetForVersionInfo(f, zf, fileVerInfo, preferPackageName);
                     var fileExists = File.Exists(file);
 
                     // NB: If we've already installed the app, but the shortcut
@@ -259,7 +260,7 @@ namespace Squirrel
                 fixPinnedExecutables(zf.Version);
             }
 
-            public void RemoveShortcutsForExecutable(string exeName, ShortcutLocation locations)
+            public void RemoveShortcutsForExecutable(string exeName, ShortcutLocation locations, bool preferPackageName)
             {
                 var releases = Utility.LoadLocalReleases(Utility.LocalReleaseFileForAppDir(rootAppDirectory));
                 var thisRelease = Utility.FindCurrentVersion(releases);
@@ -274,7 +275,7 @@ namespace Squirrel
                 foreach (var f in (ShortcutLocation[]) Enum.GetValues(typeof(ShortcutLocation))) {
                     if (!locations.HasFlag(f)) continue;
 
-                    var file = linkTargetForVersionInfo(f, zf, fileVerInfo);
+                    var file = linkTargetForVersionInfo(f, zf, fileVerInfo, preferPackageName);
 
                     this.Log().Info("Removing shortcut for {0} => {1}", exeName, file);
 
@@ -389,7 +390,7 @@ namespace Squirrel
                     File.Copy(newSquirrel, Path.Combine(targetDir.Parent.FullName, "Update.exe"), true));
             }
 
-            async Task invokePostInstall(SemanticVersion currentVersion, bool isInitialInstall, bool firstRunOnly, bool silentInstall)
+            async Task invokePostInstall(SemanticVersion currentVersion, bool isInitialInstall, bool firstRunOnly, bool silentInstall, bool preferPackageNameForShortcut)
             {
                 var targetDir = getDirectoryForRelease(currentVersion);
                 var command = isInitialInstall ? "--squirrel-install" : "--squirrel-updated";
@@ -425,7 +426,7 @@ namespace Squirrel
 
                     // Create shortcuts for apps automatically if they didn't
                     // create any Squirrel-aware apps
-                    squirrelApps.ForEach(x => CreateShortcutsForExecutable(Path.GetFileName(x), ShortcutLocation.Desktop | ShortcutLocation.StartMenu, isInitialInstall == false, null, null));
+                    squirrelApps.ForEach(x => CreateShortcutsForExecutable(Path.GetFileName(x), ShortcutLocation.Desktop | ShortcutLocation.StartMenu, isInitialInstall == false, null, null, preferPackageNameForShortcut));
                 }
 
                 if (!isInitialInstall || silentInstall) return;
@@ -688,11 +689,12 @@ namespace Squirrel
                 return new DirectoryInfo(Path.Combine(rootAppDirectory, "app-" + releaseVersion));
             }
 
-            string linkTargetForVersionInfo(ShortcutLocation location, IPackage package, FileVersionInfo versionInfo)
+            string linkTargetForVersionInfo(ShortcutLocation location, IPackage package, FileVersionInfo versionInfo, bool preferPackageName = false)
             {
                 var possibleProductNames = new[] {
-                    versionInfo.ProductName,
+                    !preferPackageName ? versionInfo.ProductName : null, //put assembly product name first if package name is not preferred
                     package.ProductName,
+                    preferPackageName ? versionInfo.ProductName : null, //put assembly product name after package name if it is
                     versionInfo.FileDescription,
                     Path.GetFileNameWithoutExtension(versionInfo.FileName)
                 };
