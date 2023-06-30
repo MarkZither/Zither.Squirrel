@@ -8,7 +8,8 @@ Squirrel uses information from your app's EXE as well as the NuGet package Metad
 * **Id** - name of the application (**warning:** you must **[avoid using spaces and dots](https://github.com/Squirrel/Squirrel.Windows/issues/523)** in the Id).
   * Name of the release packages (e.g., **MyApp**-1.0.0-full.nupkg). 
   * Local installation directory (e.g., `%LocalAppData%\MyApp`).
-* **Title** - used for the name of the application in the Windows Application Uninstaller.
+* **Title** - used for the name of the application in the Windows Application Uninstaller. 
+  * Also used for shortcut name if the AssemblyInfo has no shortcut or the preferPackageName flag is set. 
 * **Version** - version specified in `Properties\Assembly.cs`. 
   * Name of the release package (e.g., MyApp-**1.0.0**-full.nupkg).
   * Version number in the Windows Uninstaller (see screenshot below).

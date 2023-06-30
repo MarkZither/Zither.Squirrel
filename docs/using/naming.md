@@ -14,6 +14,9 @@ The shortcut name is selected from the first non-null item below:
 3. `[assembly: AssemblyDescription("MyApp")` (from `AssemblyInfo.cs`)
 4. Filename of the Exe (e.g., MyApp)
 
+Note: In some instances it may be preferable to use the package name for the shortcut, in preference to the assembly product name. e.g. When you have the same assembly build repackaged with different configuration files for different environments. 
+In order to switch the order of 1 and 2 above, the IAppTools.CreateShortcutForThisExe and corresponding RemoveShortcutForThisExe have a preferPackageName boolean. This should also be set for the UpdateManager.ApplyReleases call.
+
 ## Local Install location
 
 The local install location is determined by the `id` in the NuGet package metadata.
