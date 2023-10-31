@@ -21,6 +21,9 @@ namespace Squirrel.Sources
         public virtual async Task DownloadFile(string url, string targetFile, Action<int> progress, string authorization, string accept)
         {
             using var client = CreateHttpClient(authorization, accept);
+
+            //TODO verify that the client is valid? or verify the response of that await command so no error on bad call.
+
             try {
                 using (var fs = File.Open(targetFile, FileMode.Create)) {
                     await DownloadToStreamInternal(client, url, fs, progress).ConfigureAwait(false);
@@ -51,6 +54,10 @@ namespace Squirrel.Sources
         public virtual async Task<string> DownloadString(string url, string authorization, string accept)
         {
             using var client = CreateHttpClient(authorization, accept);
+
+            //TODO: response.EnsureSuccessStatusCode(); or equivalent
+            // Invalid authorization, accept will cause GetStringAsync to return 401 or fail. 
+
             try {
                 return await client.GetStringAsync(url).ConfigureAwait(false);
             } catch {
@@ -122,6 +129,7 @@ namespace Squirrel.Sources
         protected virtual HttpClient CreateHttpClient(string authorization, string accept)
         {
             var client = new HttpClient(CreateHttpClientHandler(), true);
+
             client.DefaultRequestHeaders.UserAgent.Add(UserAgent);
 
             if (authorization != null)
