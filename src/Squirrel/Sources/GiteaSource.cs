@@ -157,7 +157,7 @@ namespace Squirrel.Sources
         //TODO add support for more Auth types https://docs.gitea.com/next/development/api-usage
 
         /// <summary> The Bearer token used in the request. </summary>
-        protected virtual string? Authorization => string.IsNullOrWhiteSpace(AccessToken) ? null : "Bearer " + AccessToken;
+        protected virtual string? Authorization => string.IsNullOrWhiteSpace(AccessToken) ? null : AccessToken;
 
         /// <inheritdoc cref="GiteaSource" />
         /// <param name="repoUrl">
@@ -199,12 +199,11 @@ namespace Squirrel.Sources
             // containing a reference to the GiteaReleaseAsset instead.
             Release = releases.First();
 
-            // assetUrl might be a browser url or an api url (depending on whether we have a AccessToken or not) actually depending on how I code this lol
             // https://docs.Gitea.com/en/rest/reference/releases#get-a-release-asset
-            var assetUrl = GetAssetUrlFromName(Release, "RELEASES"); //looks good. Test it. TODO
+            var assetUrl = GetAssetUrlFromName(Release, "RELEASES");
             var releaseBytes = await Downloader.DownloadBytes(assetUrl, Authorization, "application/octet-stream").ConfigureAwait(false); //test this method
-            var txt = Utility.RemoveByteOrderMarkerIfPresent(releaseBytes); // find out why to do this
-            return ReleaseEntry.ParseReleaseFileAndApplyStaging(txt, stagingId).ToArray(); //try this one out too for the hell of it TODO
+            var txt = Utility.RemoveByteOrderMarkerIfPresent(releaseBytes);
+            return ReleaseEntry.ParseReleaseFileAndApplyStaging(txt, stagingId).ToArray();
         }
 
         /// <inheritdoc />
