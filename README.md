@@ -50,11 +50,20 @@ Apps should be as fast easy to install. Update should be seamless like Google Ch
 2. Add SquirrelAwareVersion to your assembly manifest to indicate that your exe supports Squirrel. 
 Note: In newer .NET Core versions you first need to add the Application Manifest through New Item window.
 
+app.manifest:
    ```xml
    <?xml version="1.0" encoding="utf-8"?>
    <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
      <SquirrelAwareVersion xmlns="urn:schema-squirrel-com:asm.v1">1</SquirrelAwareVersion>
    </assembly>
+   ```
+YourApp.csproj:
+   ```xml
+   <Project Sdk="Microsoft.NET.Sdk">
+     <PropertyGroup>
+      <ApplicationManifest>YourApp\app.manifest</ApplicationManifest>
+     </PropertyGroup>
+   </Project>
    ```
 
 3. Handle Squirrel events somewhere very early in your application startup (such as the beginning of `main()` or `Application.OnStartup()` for WPF). 
