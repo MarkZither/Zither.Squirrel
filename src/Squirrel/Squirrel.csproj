@@ -37,4 +37,8 @@
     <None Include="..\..\docs\artwork\Clowd_200.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Squirrel.VCDiff\Squirrel.VCDiff.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
+using VCDiff.Decoders;
 
 // https://dev.to/emrahsungu/how-to-compare-two-files-using-net-really-really-fast-2pd9
 // https://github.com/SnowflakePowered/vcdiff
@@ -86,7 +87,7 @@ namespace Squirrel.Compression
         void applyDiffToFile(string deltaPath, string relativeFilePath, string workingDirectory)
         {
             var inputFile = Path.Combine(deltaPath, relativeFilePath);
-            var finalTarget = Path.Combine(workingDirectory, Regex.Replace(relativeFilePath, @"\.(bs)?diff$", ""));
+            var finalTarget = Path.Combine(workingDirectory, Regex.Replace(relativeFilePath, @"\.(bs|vc)?diff$", ""));
 
             using var _d = Utility.GetTempFileName(out var tempTargetFile, _baseTempDir);
 
@@ -96,7 +97,18 @@ namespace Squirrel.Compression
                 return;
             }
 
-            if (relativeFilePath.EndsWith(".bsdiff", StringComparison.InvariantCultureIgnoreCase)) {
+            if (relativeFilePath.EndsWith(".vcdiff", StringComparison.InvariantCultureIgnoreCase)) {
+
+                const int FS_BUFFER_SIZE = 1000000; // 1mb
+                using (var of = File.OpenWrite(tempTargetFile))
+                using (var delta = new FileStream(inputFile, FileMode.Open, FileAccess.Read, FileShare.Read, FS_BUFFER_SIZE))
+                using (var inf = new FileStream(finalTarget, FileMode.Open, FileAccess.Read, FileShare.Read, FS_BUFFER_SIZE)) {
+                    _log.Trace($"Applying vcdiff to {relativeFilePath}");
+                    using var decoder = new VcDecoder(inf, delta, of, int.MaxValue);
+                    decoder.Decode(out long written);
+                }
+                verifyPatchedFile(relativeFilePath, inputFile, tempTargetFile);
+            } else if (relativeFilePath.EndsWith(".bsdiff", StringComparison.InvariantCultureIgnoreCase)) {
                 using (var of = File.OpenWrite(tempTargetFile))
                 using (var inf = File.OpenRead(finalTarget)) {
                     _log.Trace($"Applying bsdiff to {relativeFilePath}");

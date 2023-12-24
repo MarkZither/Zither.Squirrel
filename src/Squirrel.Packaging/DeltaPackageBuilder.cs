@@ -1,6 +1,8 @@
 ﻿using System.Text;
 using Squirrel.Compression;
 using Microsoft.Extensions.Logging;
+using NuGet.Protocol.Plugins;
+using VCDiff.Encoders;
 
 namespace Squirrel.Packaging;
 
@@ -66,11 +68,6 @@ public class DeltaPackageBuilder
 
             int fNew = 0, fSame = 0, fChanged = 0, fWarnings = 0;
 
-            bool bytesAreIdentical(ReadOnlySpan<byte> a1, ReadOnlySpan<byte> a2)
-            {
-                return a1.SequenceEqual(a2);
-            }
-
             void createDeltaForSingleFile(FileInfo targetFile, DirectoryInfo workingDirectory)
             {
                 // NB: There are three cases here that we'll handle:
@@ -95,21 +92,23 @@ public class DeltaPackageBuilder
                     var oldFilePath = baseLibFiles[relativePath];
                     _logger.Debug($"Delta patching {oldFilePath} => {targetFile.FullName}");
 
-                    var oldData = File.ReadAllBytes(oldFilePath);
-                    var newData = File.ReadAllBytes(targetFile.FullName);
-
-                    if (bytesAreIdentical(oldData, newData)) {
+                    var comparer = new FileComparer(oldFilePath, targetFile.FullName);
+                    if (comparer.Compare()) {
                         // 2. exists in both, keep it the same
                         _logger.Debug($"{relativePath} hasn't changed, writing dummy file");
-                        File.Create(targetFile.FullName + ".bsdiff").Dispose();
+                        File.Create(targetFile.FullName + ".vcdiff").Dispose();
                         File.Create(targetFile.FullName + ".shasum").Dispose();
                         fSame++;
                     } else {
                         // 3. changed, write a delta in new
-                        using (FileStream of = File.Create(targetFile.FullName + ".bsdiff")) {
-                            BinaryPatchUtility.Create(oldData, newData, of);
-                        }
-                        var rl = ReleaseEntry.GenerateFromFile(new MemoryStream(newData), targetFile.Name + ".shasum");
+                        const int FS_BUFFER_SIZE = 1000000; // 1mb
+                        using var source = new FileStream(oldFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, FS_BUFFER_SIZE);
+                        using var target = new FileStream(targetFile.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, FS_BUFFER_SIZE);
+                        using var output = File.Create(targetFile.FullName + ".vcdiff");
+                        using var encoder = new VcEncoder(source, target, output, 1, 32);
+                        encoder.Encode();
+                        target.Seek(0, SeekOrigin.Begin);
+                        var rl = ReleaseEntry.GenerateFromFile(target, targetFile.Name + ".shasum");
                         File.WriteAllText(targetFile.FullName + ".shasum", rl.EntryAsString, Encoding.UTF8);
                         fChanged++;
                     }
@@ -117,8 +116,7 @@ public class DeltaPackageBuilder
                     baseLibFiles.Remove(relativePath);
                 } catch (Exception ex) {
                     _logger.Debug(ex, String.Format("Failed to create a delta for {0}", targetFile.Name));
-                    Utility.DeleteFileOrDirectoryHard(targetFile.FullName + ".bsdiff", throwOnFailure: false);
-                    Utility.DeleteFileOrDirectoryHard(targetFile.FullName + ".diff", throwOnFailure: false);
+                    Utility.DeleteFileOrDirectoryHard(targetFile.FullName + ".vcdiff", throwOnFailure: false);
                     Utility.DeleteFileOrDirectoryHard(targetFile.FullName + ".shasum", throwOnFailure: false);
                     fWarnings++;
                     throw;

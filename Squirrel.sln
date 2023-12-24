@@ -32,7 +32,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Squirrel.Deployment", "src\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Squirrel.Packaging.Tests", "test\Squirrel.Packaging.Tests\Squirrel.Packaging.Tests.csproj", "{175B06A5-5C09-4DAB-A6AF-C8A2257BD1B6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestApp", "test\TestApp\TestApp.csproj", "{784B5987-2E71-4AEE-81B9-E0CC7F1DBEB3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestApp", "test\TestApp\TestApp.csproj", "{784B5987-2E71-4AEE-81B9-E0CC7F1DBEB3}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Squirrel.VCDiff", "src\Squirrel.VCDiff\Squirrel.VCDiff.csproj", "{302EA080-C3AE-42E5-BB19-E628E893C748}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -80,6 +82,10 @@ Global
 		{784B5987-2E71-4AEE-81B9-E0CC7F1DBEB3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{784B5987-2E71-4AEE-81B9-E0CC7F1DBEB3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{784B5987-2E71-4AEE-81B9-E0CC7F1DBEB3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{302EA080-C3AE-42E5-BB19-E628E893C748}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{302EA080-C3AE-42E5-BB19-E628E893C748}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{302EA080-C3AE-42E5-BB19-E628E893C748}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{302EA080-C3AE-42E5-BB19-E628E893C748}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
