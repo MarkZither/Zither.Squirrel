@@ -109,7 +109,7 @@ Note: In newer .NET Core versions you first need to add the Application Manifest
    Important Notes:
    - The same `--releaseDir` (default `.\Releases` if not specified) should be used each time, so delta updates can be generated.
    - The package version must comply to strict 3-part SemVer syntax. (eg. `1.0.0`, `1.0.1-pre`)
-   - A list of supported runtimes for the `--framework` argument is [available here](https://github.com/clowd/Clowd.Squirrel/blob/develop/src/Squirrel/Runtimes.cs)
+   - A list of supported runtimes for the `--framework` argument is [available here](https://github.com/clowd/Clowd.Squirrel/blob/develop/src/Squirrel/Windows/Runtimes.cs)
    
 6. Distribute your entire `--releaseDir` folder online. This folder can be hosted on any static web/file server, [Amazon S3](docs/using/amazon-s3.md), BackBlaze B2, or even via [GitHub Releases](docs/using/github.md). 
    
