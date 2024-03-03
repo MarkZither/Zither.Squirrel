@@ -4,8 +4,8 @@ Please find our new home at Velopack: https://github.com/velopack/velopack
 
 <a href="https://github.com/velopack/velopack">
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/velopack/velopack/master/docfx/images/velopack-white.svg">
-  <img alt="Velopack Logo" src="https://raw.githubusercontent.com/velopack/velopack/master/docfx/images/velopack-black.svg" width="300">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/velopack/velopack/master/artwork/velopack-white.svg">
+  <img alt="Velopack Logo" src="https://raw.githubusercontent.com/velopack/velopack/master/artwork/velopack-black.svg" width="300">
 </picture>
 </a>
 
