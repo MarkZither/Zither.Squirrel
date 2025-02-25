@@ -3,11 +3,11 @@
 
 [![Nuget (with prereleases)](https://img.shields.io/nuget/vpre/Clowd.Squirrel?style=flat-square)](https://www.nuget.org/packages/Clowd.Squirrel/)
 
-# Clowd.Squirrel
+# Zither.Squirrel
 
 Squirrel is both a set of tools and a library, to completely manage both installation and updating your Desktop Windows application.
 
-This project is a fork of the library [Squirrel.Windows](https://github.com/Squirrel/Squirrel.Windows). The main focus here has been to update to more modern tooling, such as upgrading the main libraries to `netstandard2.0`, upgrading the tools to `net6.0`, and adding lots of fixes for dotnet core support.
+This project is a fork of [Clowd.Squirrel](https://github.com/clowd/Clowd.Squirrel) which was a fork of the library [Squirrel.Windows](https://github.com/Squirrel/Squirrel.Windows). The main focus here has been to update to more modern tooling, such as upgrading the main libraries to `netstandard2.0`, upgrading the tools to `net6.0`, and adding lots of fixes for dotnet core support.
 
 This library will help you build a `Setup.exe`, integrated (or standalone `Update.exe`) application updater, and release updates to your users very quickly and easily. The `Setup.exe` and `Update.exe` produced by this library are completely dependency free, and can even help you bootstrap/install any number of runtimes your app needs (such as dotnet 5/6, .net 4.8 or others).
 
